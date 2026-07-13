@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GAMESHELF — Sistema de Gestión y Consulta de Videojuegos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --bg: #06080c;
+  --panel: rgba(15, 20, 32, 0.85);
+  --panel-2: rgba(28, 36, 54, 0.9);
+  --line: rgba(0, 255, 65, 0.2);
+  --text: #F2F4F8;
+  --muted: #A0A9BD;
+  --matrix-color: #ff5d5d; /* Rojo al inicio (Bloqueado) */
+
+  --font-display: 'Press Start 2P', monospace;
+  --font-body: 'Space Grotesk', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --radius: 8px;
+}
+
+*{ box-sizing: border-box; }
+html{ scroll-behavior: smooth; }
+
+body{
+  margin:0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  line-height: 1.5;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+#matrix-canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: -1;
+  opacity: 0.35;
+}
+
+.scanlines{
+  position: fixed; inset: 0; pointer-events: none; z-index: 50;
+  background: repeating-linear-gradient(to bottom, rgba(255,255,255,0.015) 0px, rgba(255,255,255,0.015) 1px, transparent 1px, transparent 3px);
+  mix-blend-mode: overlay;
+}
+
+/* --- INTERFAZ DE LOGIN --- */
+.login-screen {
+  position: fixed; inset: 0; z-index: 100;
+  display: flex; justify-content: center; align-items: center; padding: 24px;
+  background: rgba(6, 8, 12, 0.8);
+  backdrop-filter: blur(8px);
+}
+.login-card {
+  background: var(--panel);
+  border: 2px solid var(--matrix-color);
+  border-radius: var(--radius);
+  padding: 40px; width: min(420px, 100%);
+  box-shadow: 0 0 20px rgba(255, 93, 93, 0.2);
+  transition: border-color 0.5s ease;
+}
+.login-card h2 {
+  font-family: var(--font-display);
+  font-size: 14px; text-align: center; margin-bottom: 30px;
+  color: #fff;
+}
+.form-group { margin-bottom: 20px; }
+.form-group label {
+  display: block; font-family: var(--font-mono); font-size: 12px;
+  color: var(--muted); margin-bottom: 6px;
+}
+.form-group input {
+  width: 100%; background: rgba(0,0,0,0.5); border: 1px solid var(--line);
+  padding: 12px; color: #fff; font-family: var(--font-body); border-radius: 4px;
+}
+.form-group input:focus { outline: 1px solid var(--matrix-color); }
+.btn-submit {
+  width: 100%; background: var(--matrix-color); color: #000;
+  border: none; padding: 12px; font-family: var(--font-mono);
+  font-weight: bold; font-size: 13px; cursor: pointer; border-radius: 4px;
+  transition: background 0.3s;
+}
+.login-hint{
+  color: var(--muted); font-family: var(--font-mono); font-size: 11px;
+  margin-top: 15px; text-align: center;
+}
+.login-error {
+  color: #ff5d5d; font-family: var(--font-mono); font-size: 12px;
+  margin-top: 15px; text-align: center; display: none;
+}
+
+/* --- INTERFAZ DEL APLICATIVO --- */
+.app-container[hidden] { display: none; }
+
+.topbar{
+  position: sticky; top: 0; z-index: 40;
+  background: rgba(6, 8, 12, 0.85); backdrop-filter: blur(14px);
+  border-bottom: 2px solid var(--matrix-color);
+  transition: border-color 0.5s ease;
+}
+.topbar__inner{
+  max-width: 1100px; margin: 0 auto; padding: 16px 24px;
+  display:flex; align-items:center; justify-content:space-between; gap: 20px;
+}
+.logo{
+  display:flex; align-items:center; gap:10px;
+  font-family: var(--font-display); font-size: 14px; text-decoration:none; color: var(--text);
+}
+.logo__chip{
+  width: 14px; height: 14px; background: var(--matrix-color); border-radius: 3px;
+  transition: background 0.5s ease;
+}
+
+.search-wrapper { display: flex; align-items: center; gap: 15px; }
+.search{
+  display:flex; align-items:center; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 999px; padding: 4px 6px 4px 16px; width: 260px;
+}
+.search input{ flex:1; background:transparent; border:none; color:var(--text); font-family: var(--font-body); font-size: 14px; }
+.search input:focus{ outline:none; }
+.search button{ background: transparent; border:none; cursor:pointer; }
+
+.btn-logout {
+  background: transparent; color: #ff5d5d; border: 1px solid #ff5d5d;
+  padding: 6px 12px; font-family: var(--font-mono); font-size: 11px;
+  border-radius: 4px; cursor: pointer;
+}
+.btn-logout:hover { background: #ff5d5d; color: #000; }
+
+.hero{ max-width: 1100px; margin: 40px auto 20px; padding: 0 24px; }
+.hero__eyebrow{ font-family: var(--font-mono); color: var(--matrix-color); font-size: 13px; }
+.hero__title{ font-family: var(--font-display); font-size: clamp(24px, 5vw, 44px); margin: 10px 0; color: #fff; }
+
+.genre-strip{ max-width: 1100px; margin: 0 auto 30px; padding: 0 24px; }
+.genre-strip__track{ display:flex; gap: 10px; overflow-x: auto; padding-bottom: 12px; }
+.chip{
+  flex-shrink:0; display:flex; align-items:center; gap:8px;
+  font-family: var(--font-mono); font-size: 13px; color: var(--muted);
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 6px; padding: 8px 16px; cursor:pointer;
+}
+.chip.is-active{ color: #000; background: var(--matrix-color); border-color: var(--matrix-color); font-weight: bold; }
+
+.board{ max-width: 1100px; margin: 0 auto 60px; padding: 0 24px; }
+.board__meta{ font-family: var(--font-mono); color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+.list-container{ display: flex; flex-direction: column; gap: 16px; }
+
+.card{
+  display: flex; background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--radius); overflow: hidden; cursor: pointer; color: inherit; text-decoration: none;
+  width: 100%; transition: transform 0.2s ease;
+}
+.card:hover{ transform: scale(1.01); border-color: var(--matrix-color); }
+.card__cover{ width: 200px; min-width: 200px; aspect-ratio: 16/10; position:relative; background: #000; }
+.card__cover img{ width:100%; height:100%; object-fit: cover; display:block; }
+.card__discount{ position:absolute; top:8px; left:8px; background: #ff5d5d; color:#000; font-family: var(--font-mono); font-weight:700; font-size: 11px; padding: 2px 6px; border-radius: 4px; }
+.card__body{ padding: 16px; display:flex; flex-direction:column; justify-content: space-between; flex:1; }
+.card__title{ font-family: var(--font-body); font-weight: 700; font-size: 18px; margin:0; color: #fff; }
+.card__meta-row{ display: flex; justify-content: space-between; align-items: center; font-family: var(--font-mono); font-size: 13px; }
+.card__price-old{ text-decoration: line-through; opacity: 0.5; margin-right: 8px; }
+.card__price-new{ color: #4cd97b; font-weight: 700; font-size: 16px; }
+
+/* Etiqueta especial de Gratis */
+.card__price-free{
+  color: #00ff41; font-weight: 700; font-size: 16px;
+  text-shadow: 0 0 5px rgba(0,255,65,0.5); animation: blink 2s infinite linear;
+}
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+/* Modal */
+.modal{ position: fixed; inset: 0; z-index: 60; display:grid; place-items:center; padding: 24px; }
+.modal[hidden]{ display:none; }
+.modal__backdrop{ position:absolute; inset:0; background: rgba(0,0,0,0.85); backdrop-filter: blur(4px); }
+.modal__panel{ position:relative; z-index:1; width: min(600px, 100%); max-height: 85vh; overflow-y: auto; background: #0f1420; border: 2px solid var(--matrix-color); border-radius: var(--radius); padding: 24px; }
+.modal__close{ float:right; background: var(--panel-2); border:none; color: var(--text); width: 30px; height:30px; border-radius: 50%; cursor:pointer; }
+.detail__cover{ width:100%; aspect-ratio: 16/9; object-fit: cover; margin-top: 10px; border-radius: 4px; }
+.detail__title{ font-family: var(--font-body); font-size: 22px; font-weight:700; margin: 15px 0 5px; color:#fff; }
+.detail__store-row{ display:flex; justify-content:space-between; border-bottom: 1px dashed rgba(255,255,255,0.1); padding: 8px 0; font-family: var(--font-mono); font-size: 13px; }
+
+.btn--load-more{ display:block; margin: 30px auto 0; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); padding: 10px 24px; border-radius: 20px; cursor: pointer; font-family: var(--font-mono); }
+.state{ text-align:center; padding: 40px; border: 1px dashed var(--line); background: var(--panel); border-radius: var(--radius); }
+
+@media (max-width: 680px){
+  .card { flex-direction: column; }
+  .card__cover { width: 100%; }
+  .search-wrapper { flex-direction: column; gap: 8px; }
+}
+</style>
+</head>
+<body>
+
+<canvas id="matrix-canvas"></canvas>
+<div class="scanlines" aria-hidden="true"></div>
+
+<div class="login-screen" id="loginScreen">
+  <div class="login-card">
+    <h2>SECURE_ACCESS_LOG</h2>
+    <form id="loginForm">
+      <div class="form-group">
+        <label>USUARIO</label>
+        <input type="text" id="loginUser" placeholder="Nombre de usuario" required autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label>CONTRASEÑA</label>
+        <input type="password" id="loginPass" placeholder="••••••••" required>
+      </div>
+      <button type="submit" class="btn-submit">VALIDAR CREDENCIALES</button>
+      <div class="login-hint">Demo: usuario <strong>admin</strong> / contraseña <strong>123</strong></div>
+      <div class="login-error" id="loginError">ACCESO DENEGADO: Credenciales Incorrectas</div>
+    </form>
+  </div>
+</div>
+
+<div class="app-container" id="appContainer" hidden>
+  <header class="topbar">
+    <div class="topbar__inner">
+      <a href="#top" class="logo">
+        <span class="logo__chip"></span>
+        GAMESHELF // UTP
+      </a>
+      <div class="search-wrapper">
+        <div class="search">
+          <input type="search" id="searchInput" placeholder="Buscar título...">
+          <button type="button">🔍</button>
+        </div>
+        <button class="btn-logout" id="logoutBtn">CERRAR SESIÓN</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <p class="hero__eyebrow">SESIÓN ACTIVA // SUBSISTEMA DE DATOS</p>
+      <h1 class="hero__title">VITRINA DE JUEGOS</h1>
+    </section>
+
+    <nav class="genre-strip">
+      <div class="genre-strip__track" id="genreTrack">
+        <button class="chip is-active" data-store="" type="button">Todas las tiendas</button>
+      </div>
+    </nav>
+
+    <section class="board">
+      <div class="board__meta"><span id="resultCount">Iniciando...</span></div>
+      <div class="list-container" id="gameGrid"></div>
+      <div class="state" id="emptyState" hidden>No hay registros coincidentes.</div>
+      <button class="btn--load-more" id="loadMoreBtn" type="button" hidden>Cargar más registros</button>
+    </section>
+  </main>
+</div>
+
+<div class="modal" id="modal" hidden>
+  <div class="modal__backdrop" id="modalBackdrop"></div>
+  <div class="modal__panel">
+    <button class="modal__close" id="modalClose">✕</button>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
+<footer style="text-align: center; padding: 40px; font-size: 12px; color: var(--muted); font-family: var(--font-mono);">
+  <p>Universidad Tecnológica de Puebla — Desarrollo de Software • Grupo 9E</p>
+</footer>
+
+<script>
+const BASE_URL = "https://www.cheapshark.com/api/1.0";
+const PAGE_SIZE = 15;
+const RAINBOW_COLORS = ["#00ff41", "#FF5D5D", "#4FD6E8", "#F5C242", "#9D7BFF", "#4CD97B", "#ff00bb"];
+
+const state = {
+  storeID: "",
+  search: "",
+  page: 0,
+  storesByID: {},
+  currentColor: "#ff5d5d", // Rojo por defecto en login
+  isLogged: false
+};
+
+// --- RENDER MATRIX CANVAS ---
+const canvas = document.getElementById('matrix-canvas');
+const ctx = canvas.getContext('2d');
+let columnas, gotas;
+const tamanoFuente = 14;
+
+function initMatrix() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  columnas = canvas.width / tamanoFuente;
+  gotas = Array(Math.floor(columnas)).fill(1);
+}
+initMatrix();
+window.addEventListener('resize', initMatrix);
+
+function drawMatrix() {
+  ctx.fillStyle = "rgba(6, 8, 12, 0.08)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = state.currentColor;
+  ctx.font = tamanoFuente + "px monospace";
+
+  for (let i = 0; i < gotas.length; i++) {
+    const texto = String.fromCharCode(0x30A0 + Math.random() * 96);
+    ctx.fillText(texto, i * tamanoFuente, gotas[i] * tamanoFuente);
+    if (gotas[i] * tamanoFuente > canvas.height && Math.random() > 0.975) gotas[i] = 0;
+    gotas[i]++;
+  }
+}
+setInterval(drawMatrix, 35);
+
+// --- GESTIÓN DE AUTENTICACIÓN ---
+document.getElementById("loginForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const username = document.getElementById("loginUser").value.trim();
+  const pass = document.getElementById("loginPass").value;
+  const errorDiv = document.getElementById("loginError");
+
+  if (username === "admin" && pass === "123") {
+    state.isLogged = true;
+    state.currentColor = "#00ff41";
+    document.documentElement.style.setProperty('--matrix-color', state.currentColor);
+
+    document.getElementById("loginScreen").style.display = "none";
+    document.getElementById("appContainer").removeAttribute("hidden");
+
+    initApp();
+  } else {
+    errorDiv.style.display = "block";
+    state.currentColor = "#ff0000";
+    setTimeout(() => { state.currentColor = "#ff5d5d"; }, 300);
+  }
+});
+
+document.getElementById("logoutBtn").addEventListener("click", () => {
+  state.isLogged = false;
+  state.currentColor = "#ff5d5d";
+  document.documentElement.style.setProperty('--matrix-color', state.currentColor);
+  document.getElementById("loginUser").value = "";
+  document.getElementById("loginPass").value = "";
+  document.getElementById("loginError").style.display = "none";
+
+  document.getElementById("appContainer").setAttribute("hidden", "true");
+  document.getElementById("loginScreen").style.display = "flex";
+});
+
+// --- OPERATORIA CON LA API DE VIDEOJUEGOS (CheapShark) ---
+async function initApp() {
+  if (window.appInitialized) return;
+  window.appInitialized = true;
+
+  document.getElementById("loadMoreBtn").addEventListener("click", () => loadDeals(false));
+  document.getElementById("modalClose").addEventListener("click", () => document.getElementById("modal").setAttribute("hidden", ""));
+  document.getElementById("modalBackdrop").addEventListener("click", () => document.getElementById("modal").setAttribute("hidden", ""));
+
+  let searchTimeout;
+  document.getElementById("searchInput").addEventListener("input", () => {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+      state.search = document.getElementById("searchInput").value.trim();
+      loadDeals(true);
+    }, 400);
+  });
+
+  document.getElementById("genreTrack").addEventListener("click", (e) => {
+    const button = e.target.closest(".chip");
+    if (!button) return;
+
+    document.querySelectorAll(".chip").forEach(b => b.classList.remove("is-active"));
+    button.classList.add("is-active");
+
+    state.storeID = button.dataset.store;
+
+    const index = state.storeID ? parseInt(state.storeID) % RAINBOW_COLORS.length : 0;
+    state.currentColor = RAINBOW_COLORS[index];
+    document.documentElement.style.setProperty('--matrix-color', state.currentColor);
+
+    loadDeals(true);
+  });
+
+  await loadStores();
+  await loadDeals(true);
+}
+
+async function loadStores() {
+  try {
+    const res = await fetch(`${BASE_URL}/stores`);
+    const data = await res.json();
+    const active = data.filter(s => s.isActive === 1).slice(0, 10);
+
+    active.forEach((store, i) => {
+      state.storesByID[store.storeID] = store.storeName;
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "chip";
+      btn.dataset.store = store.storeID;
+      btn.style.borderLeft = `3px solid ${RAINBOW_COLORS[i % RAINBOW_COLORS.length]}`;
+      btn.textContent = store.storeName;
+      document.getElementById("genreTrack").appendChild(btn);
+    });
+  } catch (e) { console.error("Error en categorías", e); }
+}
+
+async function loadDeals(reset = true) {
+  if (reset) { state.page = 0; document.getElementById("gameGrid").innerHTML = ""; }
+  document.getElementById("resultCount").textContent = "Extrayendo matriz de datos dinámicos...";
+
+  try {
+    let url = `${BASE_URL}/deals?pageSize=${PAGE_SIZE}&pageNumber=${state.page}&sortBy=Savings`;
+    if (state.storeID) url += `&storeID=${state.storeID}`;
+    if (state.search) url += `&title=${encodeURIComponent(state.search)}`;
+
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (reset && data.length === 0) {
+      document.getElementById("emptyState").hidden = false;
+      document.getElementById("loadMoreBtn").hidden = true;
+      document.getElementById("resultCount").textContent = "0 Registros.";
+      return;
+    }
+    document.getElementById("emptyState").hidden = true;
+
+    data.forEach(item => {
+      const card = document.createElement("div");
+      card.className = "card";
+      card.addEventListener("click", () => openDetail(item.gameID));
+
+      const savings = Math.round(parseFloat(item.savings));
+      const discount = savings > 0 ? `<div class="card__discount">-${savings}%</div>` : "";
+
+      const precioVenta = parseFloat(item.salePrice);
+      const contenedorPrecio = precioVenta === 0
+        ? `<span class="card__price-free">GRATIS</span>`
+        : `<div>
+            ${savings > 0 ? `<span class="card__price-old">$${item.normalPrice}</span>` : ""}
+            <span class="card__price-new">$${item.salePrice}</span>
+          </div>`;
+
+      card.innerHTML = `
+        <div class="card__cover">
+          ${discount}
+          <img src="${item.thumb}" alt="" loading="lazy">
+        </div>
+        <div class="card__body">
+          <h3 class="card__title">${item.title}</h3>
+          <div class="card__meta-row">
+            <span>Tienda: <strong>${state.storesByID[item.storeID] || 'Digital'}</strong></span>
+            ${contenedorPrecio}
+          </div>
+        </div>
+      `;
+      document.getElementById("gameGrid").appendChild(card);
+    });
+
+    document.getElementById("resultCount").textContent = `Registros localizados con éxito. Pág: ${state.page + 1}`;
+    document.getElementById("loadMoreBtn").hidden = data.length !== PAGE_SIZE;
+    state.page++;
+  } catch (e) { document.getElementById("resultCount").textContent = "Fallo de comunicación API."; }
+}
+
+async function openDetail(gameID) {
+  const modalBody = document.getElementById("modalBody");
+  modalBody.innerHTML = "Decodificando metadatos de producto...";
+  document.getElementById("modal").removeAttribute("hidden");
+
+  try {
+    const res = await fetch(`${BASE_URL}/games?id=${gameID}`);
+    const data = await res.json();
+
+    modalBody.innerHTML = `
+      <h2 class="detail__title">${data.info.title}</h2>
+      <img class="detail__cover" src="${data.info.thumb}" alt="">
+      <p style="margin: 10px 0; font-size:13px; color: var(--muted)">Global Game Identifier: ${gameID}</p>
+      <div style="background: rgba(255,255,255,0.05); padding: 12px; margin: 15px 0; border-radius:4px; font-family:var(--font-mono)">
+        <span style="color: var(--matrix-color)">★ HISTÓRICO MÍNIMO:</span> <strong>$${parseFloat(data.cheapestPriceEver.price) === 0 ? 'GRATIS' : data.cheapestPriceEver.price + ' USD'}</strong>
+      </div>
+      <h4 style="margin: 10px 0 5px; color: #fff;">Puntos de Venta Vinculados:</h4>
+      ${data.deals.map(d => `
+        <div class="detail__store-row">
+          <span>${state.storesByID[d.storeID] || 'Distribuidor'}</span>
+          <span><strong>${parseFloat(d.price) === 0 ? 'GRATIS' : '$' + d.price}</strong></span>
+        </div>
+      `).join('')}
+    `;
+  } catch (e) { modalBody.innerHTML = "Error decodificando la información técnica."; }
+}
+</script>
+</body>
+</html>
